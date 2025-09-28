@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Mini Project Chess</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+:root{--cell:64px;--border:#444}
+body{font-family:system-ui,Segoe UI,Roboto,Arial; text-align:center; margin:14px;}
+#top{display:flex;gap:12px;justify-content:center;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+#status{font-weight:600}
+#board{display:inline-block}
+table{border-collapse:collapse}
+.gamecell{position:relative;width:var(--cell);height:var(--cell);text-align:center;vertical-align:middle;font-size:38px;border:1px solid var(--border);cursor:pointer;user-select:none;padding:0;overflow:hidden}
+tr:nth-child(even) .gamecell:nth-child(odd), tr:nth-child(odd) .gamecell:nth-child(even){background:#000;color:#fff}
+tr:nth-child(even) .gamecell:nth-child(even), tr:nth-child(odd) .gamecell:nth-child(odd){background:#fff;color:#000}
+.green{outline:3px solid #6ee7b7;outline-offset:-3px}
+.capture{outline:3px solid #f87171;outline-offset:-3px}
+.piece{pointer-events:none;display:inline-block;line-height:var(--cell)}
+.controls{display:flex;gap:8px}
+button{padding:6px 10px;cursor:pointer}
+.moveslog{max-width:560px;margin:8px auto;font-size:13px;text-align:left}
+@media (min-width:1200px){:root{--cell:80px}.gamecell{font-size:46px}}
+</style>
+</head>
+<body>
+  <div id="top">
+    <div id="status">White to move</div>
+    <div class="controls">
+      <button id="resetBtn">Reset</button>
+      <button id="flipBtn">Flip Board</button>
+    </div>
+  </div>
+
+  <div id="board"><table id="boardTable"><tbody>
+    <!-- Rows 8 down to 1 -->
+    <!-- We'll write all 8 rows explicitly so ids are stable: x_y -->
+    <tr>
+      <td class="gamecell" id="1_8"></td><td class="gamecell" id="2_8"></td><td class="gamecell" id="3_8"></td><td class="gamecell" id="4_8"></td>
+      <td class="gamecell" id="5_8"></td><td class="gamecell" id="6_8"></td><td class="gamecell" id="7_8"></td><td class="gamecell" id="8_8"></td>
+    </tr>
+    <tr>
+      <td class="gamecell" id="1_7"></td><td class="gamecell" id="2_7"></td><td class="gamecell" id="3_7"></td><td class="gamecell" id="4_7"></td>
+      <td class="gamecell" id="5_7"></td><td class="gamecell" id="6_7"></td><td class="gamecell" id="7_7"></td><td class="gamecell" id="8_7"></td>
+    </tr>
+    <tr>
+      <td class="gamecell" id="1_6"></td><td class="gamecell" id="2_6"></td><td class="gamecell" id="3_6"></td><td class="gamecell" id="4_6"></td>
+      <td class="gamecell" id="5_6"></td><td class="gamecell" id="6_6"></td><td class="gamecell" id="7_6"></td><td class="gamecell" id="8_6"></td>
+    </tr>
+    <tr>
+      <td class="gamecell" id="1_5"></td><td class="gamecell" id="2_5"></td><td class="gamecell" id="3_5"></td><td class="gamecell" id="4_5"></td>
+      <td class="gamecell" id="5_5"></td><td class="gamecell" id="6_5"></td><td class="gamecell" id="7_5"></td><td class="gamecell" id="8_5"></td>
+    </tr>
+    <tr>
+      <td class="gamecell" id="1_4"></td><td class="gamecell" id="2_4"></td><td class="gamecell" id="3_4"></td><td class="gamecell" id="4_4"></td>
+      <td class="gamecell" id="5_4"></td><td class="gamecell" id="6_4"></td><td class="gamecell" id="7_4"></td><td class="gamecell" id="8_4"></td>
+    </tr>
+    <tr>
+      <td class="gamecell" id="1_3"></td><td class="gamecell" id="2_3"></td><td class="gamecell" id="3_3"></td><td class="gamecell" id="4_3"></td>
+      <td class="gamecell" id="5_3"></td><td class="gamecell" id="6_3"></td><td class="gamecell" id="7_3"></td><td class="gamecell" id="8_3"></td>
+    </tr>
+    <tr>
+      <td class="gamecell" id="1_2"></td><td class="gamecell" id="2_2"></td><td class="gamecell" id="3_2"></td><td class="gamecell" id="4_2"></td>
+      <td class="gamecell" id="5_2"></td><td class="gamecell" id="6_2"></td><td class="gamecell" id="7_2"></td><td class="gamecell" id="8_2"></td>
+    </tr>
+    <tr>
+      <td class="gamecell" id="1_1"></td><td class="gamecell" id="2_1"></td><td class="gamecell" id="3_1"></td><td class="gamecell" id="4_1"></td>
+      <td class="gamecell" id="5_1"></td><td class="gamecell" id="6_1"></td><td class="gamecell" id="7_1"></td><td class="gamecell" id="8_1"></td>
+    </tr>
+  </tbody></table></div>
+
+  <div class="moveslog" id="movesLog"></div>
+
+<script>
+/* Mini-project Chess — plain JS */
+/* Board model: map 'x_y' -> piece string like 'wP', 'bK', or null */
+const Game = {
+  turn: 'w', // 'w' or 'b'
+  board: {}, // cell->piece
+  selected: null,
+  flipped: false,
+  moveHistory: []
+};
+
+const GLYPHS = {
+  wP: '♙', wR: '♖', wN: '♘', wB: '♗', wQ: '♕', wK: '♔',
+  bP: '♟', bR: '♜', bN: '♞', bB: '♝', bQ: '♛', bK: '♚'
+};
+
+function cellId(x,y){return x + '_' + y;}
+function parse(cell){ const [a,b]=cell.split('_').map(Number); return {x:a,y:b}; }
+function inBounds(x,y){return x>=1 && x<=8 && y>=1 && y<=8;}
+function getPiece(cell){ return Game.board.hasOwnProperty(cell) ? Game.board[cell] : null; }
+function setPiece(cell,p){ Game.board[cell]=p; const el=document.getElementById(cell); if(el) el.setAttribute('data-piece', p? p : 'null'); }
+
+function initBoard(){
+  // clear DOM cells and model
+  for(let y=1;y<=8;y++){
+    for(let x=1;x<=8;x++){
+      const id=cellId(x,y);
+      Game.board[id]=null;
+      const el=document.getElementById(id);
+      if(el){ el.innerHTML=''; el.setAttribute('data-piece','null'); el.classList.remove('green','capture'); }
+    }
+  }
+  // place pieces
+  const order=['R','N','B','Q','K','B','N','R'];
+  for(let i=0;i<8;i++){
+    setPiece(cellId(i+1,1),'w'+order[i]); addPieceDOM(cellId(i+1,1));
+    setPiece(cellId(i+1,2),'wP'); addPieceDOM(cellId(i+1,2));
+    setPiece(cellId(i+1,7),'bP'); addPieceDOM(cellId(i+1,7));
+    setPiece(cellId(i+1,8),'b'+order[i]); addPieceDOM(cellId(i+1,8));
+  }
+  Game.turn='w'; Game.selected=null; Game.moveHistory=[];
+  updateStatus();
+  document.getElementById('movesLog').textContent = '';
+}
+
+function addPieceDOM(cell){
+  const p = getPiece(cell);
+  const el = document.getElementById(cell);
+  if(!el) return;
+  // preserve listeners: clear children then add piece span
+  el.innerHTML = '';
+  const span = document.createElement('span');
+  span.className='piece';
+  span.textContent = GLYPHS[p];
+  el.appendChild(span);
+  el.setAttribute('data-piece', p);
+}
+
+function attachClicks(){
+  document.querySelectorAll('.gamecell').forEach(cell => {
+    cell.onclick = (e) => {
+      const id = cell.id;
+      // if clicked on same selected, clear selection
+      if(Game.selected === id){ Game.selected = null; clearHighlights(); return; }
+      const piece = getPiece(id);
+      if(Game.selected){
+        // attempt move
+        attemptMove(Game.selected, id);
+      } else {
+        // select if it's your piece
+        if(piece && piece[0] === Game.turn) { selectCell(id); }
+      }
+    };
+  });
+  document.getElementById('resetBtn').onclick = () => initBoard();
+  document.getElementById('flipBtn').onclick = () => { flipBoard(); };
+}
+
+function selectCell(cell){
+  clearHighlights();
+  Game.selected = cell;
+  document.getElementById(cell).classList.add('green');
+  const piece = getPiece(cell);
+  const moves = generateLegalMoves(cell);
+  moves.forEach(m => {
+    const el = document.getElementById(m);
+    if(getPiece(m)) el.classList.add('capture'); else el.classList.add('green');
+  });
+}
+
+function clearHighlights(){
+  document.querySelectorAll('.gamecell').forEach(c=> c.classList.remove('green','capture'));
+}
+
+function generateLegalMoves(cell){
+  // returns list of destination cell ids that are legal (not leaving king in check)
+  const pseudo = generatePseudoMoves(cell);
+  const legal = [];
+  for(const dst of pseudo){
+    // simulate
+    const fromPiece = getPiece(cell);
+    const toPiece = getPiece(dst);
+    const backupFrom = fromPiece;
+    const backupTo = toPiece;
+    setPiece(dst, fromPiece);
+    addPieceDOM(dst);
+    setPiece(cell, null);
+    const elFrom = document.getElementById(cell); if(elFrom) { const sp=elFrom.querySelector('.piece'); if(sp) sp.remove(); }
+    const kingSafety = !isKingInCheck(fromPiece[0]);
+    // revert
+    setPiece(cell, backupFrom); if(backupFrom) addPieceDOM(cell);
+    setPiece(dst, backupTo); if(backupTo) addPieceDOM(dst); 
+    if(kingSafety) legal.push(dst);
+  }
+  return legal;
+}
+
+function generatePseudoMoves(cell){
+  // moves ignoring check rules
+  const p = getPiece(cell); if(!p) return [];
+  const color = p[0], type = p[1];
+  const {x,y} = parse(cell);
+  const moves = [];
+  if(type === 'P'){
+    const dir = color === 'w' ? 1 : -1;
+    const one = cellId(x, y + dir);
+    if(inBounds(x,y+dir) && !getPiece(one)) moves.push(one);
+    // double
+    const start = (color==='w')?2:7;
+    const two = cellId(x, y + 2*dir);
+    if(y === start && !getPiece(one) && inBounds(x,y+2*dir) && !getPiece(two)) moves.push(two);
+    // captures
+    for(const dx of [-1,1]){
+      const cx = x + dx, cy = y + dir;
+      if(inBounds(cx,cy)){
+        const ccell = cellId(cx,cy);
+        const target = getPiece(ccell);
+        if(target && target[0] !== color) moves.push(ccell);
+      }
+    }
+    // (en-passant omitted)
+  } else if(type === 'N'){
+    const deltas = [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
+    deltas.forEach(d => {
+      const nx=x+d[0], ny=y+d[1];
+      if(!inBounds(nx,ny)) return;
+      const t = getPiece(cellId(nx,ny));
+      if(!t || t[0] !== color) moves.push(cellId(nx,ny));
+    });
+  } else if(type === 'B' || type === 'R' || type === 'Q'){
+    const dirs = [];
+    if(type === 'B' || type === 'Q'){ dirs.push([1,1],[1,-1],[-1,1],[-1,-1]); }
+    if(type === 'R' || type === 'Q'){ dirs.push([1,0],[-1,0],[0,1],[0,-1]); }
+    dirs.forEach(d => {
+      let nx = x + d[0], ny = y + d[1];
+      while(inBounds(nx,ny)){
+        const idn = cellId(nx,ny);
+        const t = getPiece(idn);
+        if(!t){ moves.push(idn); }
+        else { if(t[0] !== color) moves.push(idn); break; }
+        nx += d[0]; ny += d[1];
+      }
+    });
+  } else if(type === 'K'){
+    for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++){
+      if(dx===0 && dy===0) continue;
+      const nx=x+dx, ny=y+dy;
+      if(!inBounds(nx,ny)) continue;
+      const t = getPiece(cellId(nx,ny));
+      if(!t || t[0] !== color) moves.push(cellId(nx,ny));
+    }
+    // castling omitted
+  }
+  return moves;
+}
+
+function attemptMove(from, to){
+  const legal = generateLegalMoves(from);
+  if(!legal.includes(to)){ Game.selected = null; clearHighlights(); return; }
+  const moving = getPiece(from);
+  const captured = getPiece(to);
+  // make move
+  setPiece(to, moving); addPieceDOM(to);
+  setPiece(from, null); const elFrom = document.getElementById(from); if(elFrom){ const sp=elFrom.querySelector('.piece'); if(sp) sp.remove(); }
+  // record
+  Game.moveHistory.push({from,to,piece:moving,captured:captured});
+  logMove(moving, from, to, captured);
+  // pawn promotion auto-queen
+  if(moving[1] === 'P'){
+    const {y} = parse(to);
+    if((moving[0]==='w' && y===8) || (moving[0]==='b' && y===1)){
+      setPiece(to, moving[0] + 'Q');
+      addPieceDOM(to);
+    }
+  }
+  // switch turn
+  Game.turn = Game.turn === 'w' ? 'b' : 'w';
+  Game.selected = null;
+  clearHighlights();
+  // check for check/checkmate
+  updateStatus();
+}
+
+function locateKing(color){
+  for(let y=1;y<=8;y++) for(let x=1;x<=8;x++){
+    const id = cellId(x,y);
+    const p = getPiece(id);
+    if(p && p === color + 'K') return id;
+  }
+  return null;
+}
+
+function isSquareAttacked(square, byColor){
+  // return true if any piece of byColor attacks square (ignoring whether their king would be in check)
+  for(let y=1;y<=8;y++) for(let x=1;x<=8;x++){
+    const id = cellId(x,y);
+    const p = getPiece(id);
+    if(!p || p[0] !== byColor) continue;
+    const pseudo = generatePseudoMoves(id);
+    if(pseudo.includes(square)) return true;
+  }
+  return false;
+}
+
+function isKingInCheck(color){
+  const kingCell = locateKing(color);
+  if(!kingCell) return true; // absent king => in "check"
+  const enemy = color === 'w' ? 'b' : 'w';
+  return isSquareAttacked(kingCell, enemy);
+}
+
+function updateStatus(){
+  const status = document.getElementById('status');
+  const side = Game.turn === 'w' ? "White" : "Black";
+  let text = side + " to move";
+  // check detection
+  if(isKingInCheck(Game.turn)){
+    text += " — CHECK!";
+    // optionally could detect checkmate: if current player has no legal moves -> checkmate
+    if(noLegalMoves(Game.turn)){
+      text += " — CHECKMATE!";
+    }
+  } else {
+    if(noLegalMoves(Game.turn)){
+      text += " — Stalemate!";
+    }
+  }
+  status.textContent = text;
+  // update move log maybe
+}
+
+function noLegalMoves(color){
+  // scan all pieces of color for any legal move
+  for(let y=1;y<=8;y++) for(let x=1;x<=8;x++){
+    const id = cellId(x,y);
+    const p = getPiece(id);
+    if(!p || p[0] !== color) continue;
+    const legal = generateLegalMoves(id);
+    if(legal.length>0) return false;
+  }
+  return true;
+}
+
+function logMove(piece, from, to, cap){
+  const el = document.getElementById('movesLog');
+  const san = pieceNotation(piece, from, to, cap);
+  Game.moveHistory.push(san);
+  // show last 20 moves
+  el.textContent = Game.moveHistory.slice(-20).map((m,i)=>`${i+1}. ${typeof m==='string'?m:formatMove(m)}`).join('  ');
+}
+
+function pieceNotation(piece, from, to, cap){
+  // simplified SAN-ish: Pawns show file if capture; other pieces by letter
+  const letters = {'R':'R','N':'N','B':'B','Q':'Q','K':'K'};
+  const type = piece[1];
+  if(type==='P'){
+    if(cap) return from[0] + 'x' + to;
+    return to;
+  } else {
+    return letters[type] + (cap ? 'x' : '') + to;
+  }
+}
+
+function flipBoard(){
+  Game.flipped = !Game.flipped;
+  const boardTable = document.getElementById('boardTable');
+  // reverse rows and each row's cells
+  const rows = Array.from(boardTable.querySelectorAll('tr'));
+  const newRows = rows.reverse().map(r => {
+    const cells = Array.from(r.children).reverse();
+    const tr = document.createElement('tr');
+    cells.forEach(c => tr.appendChild(c));
+    return tr;
+  });
+  boardTable.innerHTML = '';
+  newRows.forEach(r => boardTable.appendChild(r));
+}
+
+function formatMove(obj){
+  if(typeof obj === 'string') return obj;
+  return `${obj.piece} ${obj.from}->${obj.to}${obj.captured? ' x':''}`;
+}
+
+/* startup */
+document.addEventListener('DOMContentLoaded', () => {
+  initBoard();
+  attachClicks();
+});
+</script>
+</body>
+</html>
